@@ -1,0 +1,44 @@
+pipeline {
+  environment {
+    AZURE_ACR_NAME = "sofe3980uLab4.azurecr.io"
+    AZURE_AKS_CLUSTER_NAME = "sqLab4Cluster"
+    AZURE_RESOURCE_GROUP = "sqLab4ResourceGroup"
+    AZURE_REGION = "canadaeast"
+  }
+
+  agent any
+    tools {
+    maven 'maven' 
+  }
+  stages {
+    stage('Build') {
+      steps {
+        // Build the Java Maven project
+        sh 'mvn package -DskipTests -f ./BinaryCalculatorWebapp/pom.xml'
+      }
+    }
+    
+    stage('Push to ACR') {
+      steps {
+        // Authenticate Docker to Azure Container Registry
+        sh 'az acr login --name sofe3980uLab4'
+        // Build Docker image and push to Azure Container Registry
+        sh 'docker build -t $AZURE_ACR_NAME/sofe3980uLab4 .'
+        sh 'docker push $AZURE_ACR_NAME/sofe3980uLab4'
+      }
+    }
+
+    stage('Deploy to AKS') {
+      steps {
+        withAzureAKSCredentials(credentialsId: 'azure-aks-credentials') {
+          // Use Azure CLI commands to interact with AKS cluster
+          sh "az aks get-credentials --resource-group $AZURE_RESOURCE_GROUP --name $AZURE_AKS_CLUSTER_NAME --overwrite-existing"
+          
+          // Update the image of the Kubernetes deployment
+          sh "WEB_IMAGE_NAME=\"$AZURE_ACR_NAME/sofe3980uLab4:${BUILD_NUMBER}\""
+          sh "kubectl set image deployment/binarycalculator-deployment binarycalculator=sofe3980ulab4.azurecr.io/sofe3980u:$BUILD_NUMBER"
+        }
+      }
+    }
+  }
+}
